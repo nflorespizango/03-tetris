@@ -1,0 +1,61 @@
+name: Claude Issue Triage
+
+on:
+  issues:
+    types: [opened, edited]
+
+concurrency:
+  group: issue-triage-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  triage:
+    # Ignore issues created/edited by bots to avoid loops
+    if: github.event.sender.type != 'Bot'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Triage issue with Claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Eres un asistente de triage de issues para el repositorio ${{ github.repository }} (un juego de Tetris).
+            Analiza el issue #${{ github.event.issue.number }} (evento: ${{ github.event.action }}).
+
+            Pasos:
+            1. Lee el issue con `gh issue view ${{ github.event.issue.number }} --comments`.
+            2. Explora el código del repositorio (Read, Grep, Glob) para identificar los archivos y
+               funciones probablemente relacionados con el problema.
+            3. Obtén los labels existentes con `gh label list --limit 100` y asigna con
+               `gh issue edit ${{ github.event.issue.number }} --add-labels "<label1>,<label2>"`
+               únicamente los labels que correspondan de esa lista. NO crees labels nuevos.
+               Si el issue fue editado, quita con `--remove-labels` los labels que ya no apliquen
+               (solo los que tú pudiste haber añadido por triage, no toques labels puestos por personas
+               como "good first issue" o "help wanted" salvo que sean claramente incorrectos).
+            4. Publica UN solo comentario de diagnóstico, en español. Si ya existe un comentario
+               que empiece con `<!-- claude-triage -->`, actualízalo en vez de crear otro
+               (`gh issue comment ${{ github.event.issue.number }} --edit-last` solo si el último
+               comentario es tuyo; en caso contrario crea uno nuevo). El comentario debe empezar con
+               `<!-- claude-triage -->` y tener esta estructura:
+
+               ## 🔎 Diagnóstico automático
+               **Resumen:** una o dos frases.
+               **Tipo y labels asignados:** lista con justificación breve.
+               **Causa probable:** hipótesis basada en el código real.
+               **Archivos/funciones relacionadas:** rutas concretas.
+               **Pasos sugeridos para la solución:** lista accionable para quien implemente el fix.
+               **Información faltante:** preguntas al autor si el issue es ambiguo (omitir si no aplica).
+
+            Reglas: no modifiques código, no abras PRs, no cierres el issue. Si el issue no tiene
+            suficiente información, indícalo y usa el label `question` si existe.
+          claude_args: |
+            --allowed-tools "Read,Grep,Glob,Bash(gh issue view:*),Bash(gh issue edit:*),Bash(gh issue comment:*),Bash(gh label list:*)"
