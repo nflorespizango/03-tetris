@@ -13,7 +13,11 @@ const COLORS = [
   '#e57373', // Z - red
   '#90caf9', // J - pale blue
   '#ffb74d', // L - orange
+  '#b0bec5', // Tuerca - gris metálico
 ];
+
+// Celda del hueco de la tuerca: se dibuja vacía pero cuenta como llena al limpiar líneas
+const HOLE = -1;
 
 const PIECES = [
   null,
@@ -24,6 +28,7 @@ const PIECES = [
   [[5,5,0],[0,5,5],[0,0,0]],                  // Z
   [[6,0,0],[6,6,6],[0,0,0]],                  // J
   [[0,0,7],[7,7,7],[0,0,0]],                  // L
+  [[8,8,8],[8,HOLE,8],[8,8,8]],               // Tuerca
 ];
 
 const LINE_SCORES = [0, 100, 300, 500, 800];
@@ -68,7 +73,7 @@ function createBoard() {
 }
 
 function randomPiece() {
-  const type = Math.floor(Math.random() * 7) + 1;
+  const type = Math.floor(Math.random() * (PIECES.length - 1)) + 1;
   const shape = PIECES[type].map(row => [...row]);
   return { type, shape, x: Math.floor(COLS / 2) - Math.floor(shape[0].length / 2), y: 0 };
 }
@@ -76,7 +81,7 @@ function randomPiece() {
 function collide(shape, ox, oy) {
   for (let r = 0; r < shape.length; r++) {
     for (let c = 0; c < shape[r].length; c++) {
-      if (!shape[r][c]) continue;
+      if (shape[r][c] <= 0) continue;
       const nx = ox + c;
       const ny = oy + r;
       if (nx < 0 || nx >= COLS || ny >= ROWS) return true;
@@ -110,8 +115,12 @@ function tryRotate() {
 function merge() {
   for (let r = 0; r < current.shape.length; r++)
     for (let c = 0; c < current.shape[r].length; c++)
-      if (current.shape[r][c])
+      if (current.shape[r][c]) {
+        const cell = board[current.y + r][current.x + c];
+        // el hueco no sobrescribe un bloque que ya estaba dentro de la tuerca
+        if (current.shape[r][c] === HOLE && cell) continue;
         board[current.y + r][current.x + c] = current.shape[r][c];
+      }
 }
 
 function clearLines() {
@@ -179,6 +188,16 @@ function updateHUD() {
 
 function drawBlock(context, x, y, colorIndex, size, alpha) {
   if (!colorIndex) return;
+  if (colorIndex === HOLE) {
+    context.globalAlpha = alpha ?? 1;
+    context.strokeStyle = COLORS[8];
+    context.lineWidth = 2;
+    context.beginPath();
+    context.arc(x * size + size / 2, y * size + size / 2, size / 2 - 4, 0, Math.PI * 2);
+    context.stroke();
+    context.globalAlpha = 1;
+    return;
+  }
   const color = COLORS[colorIndex];
   context.globalAlpha = alpha ?? 1;
   context.fillStyle = color;
