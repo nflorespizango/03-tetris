@@ -42,6 +42,10 @@ Es una versión jugable del Tetris clásico con todas las mecánicas que esperar
 - **Sistema de puntuación** clásico de Tetris (100 / 300 / 500 / 800 multiplicado por nivel).
 - **Niveles** que aumentan cada 10 líneas y aceleran la caída.
 - **Pausa** y **Game Over** con opción de reinicio.
+- **Pantalla de inicio** con botón _Jugar_ y la tabla de **récords locales**.
+- **Top 5 de puntuaciones** guardado en `localStorage` (clave `tetris-records`) con nombre del jugador (campo de texto al hacer Game Over), puntos, líneas, nivel y fecha. La entrada nueva se resalta.
+- **Mejor combo** (bloqueos consecutivos que limpian líneas) y **líneas máximas** (clave `tetris-best-stats`), visibles aunque la partida no entre en el top.
+- Botón **Borrar récords** (con confirmación).
 
 ---
 
@@ -98,7 +102,7 @@ Define la estructura visual:
 
 - Un `<canvas id="board">` de **300 × 600** píxeles donde se renderiza el tablero.
 - Un panel lateral con `SCORE`, `LINES`, `LEVEL`, vista de la siguiente pieza y la lista de controles.
-- Un overlay para los estados **PAUSA** y **GAME OVER**.
+- Un overlay para los estados **PAUSA** y **GAME OVER** (con tabla de récords y formulario de nombre) y un overlay de **inicio** con los récords y el botón _Jugar_.
 
 ### 2. `style.css`
 
@@ -158,7 +162,7 @@ Cuando una pieza recién generada ya colisiona al aparecer (`spawn`), se dispara
 03-tetris/
 ├── index.html      # Estructura del DOM y canvas
 ├── style.css       # Estilos del juego (dark theme)
-├── game.js         # Toda la lógica del Tetris (~300 líneas)
+├── game.js         # Lógica del Tetris y tabla de récords (localStorage)
 └── README.md
 ```
 
