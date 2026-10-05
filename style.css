@@ -80,7 +80,7 @@ body {
 #board {
   display: block;
   border: 1px solid var(--border);
-  background: var(--canvas-bg);
+  background: var(--skin-bg, var(--canvas-bg));
   border-radius: 4px;
   box-shadow: 0 0 40px var(--board-shadow);
 }
@@ -118,7 +118,7 @@ body {
 #next-canvas {
   display: block;
   border: 1px solid var(--border);
-  background: var(--canvas-bg);
+  background: var(--skin-bg, var(--canvas-bg));
   border-radius: 4px;
 }
 
@@ -164,6 +164,23 @@ body {
 
 .theme-toggle[aria-checked="true"] .theme-toggle-track::after {
   transform: translateX(16px);
+}
+
+/* ---- Selector de skin ---- */
+.skin-select {
+  background: var(--kbd-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.skin-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* ---- Controles ---- */
