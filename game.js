@@ -66,6 +66,131 @@ function loadTheme() {
   }
 }
 
+// ---- Skins ----
+const SKIN_KEY = 'tetris-skin';
+const skinSelect = document.getElementById('skin-select');
+
+// Anillo del hueco de la tuerca (cada skin puede ajustar el brillo)
+function drawHoleRing(context, px, py, size, color, alpha, glow) {
+  context.globalAlpha = alpha ?? 1;
+  context.strokeStyle = color;
+  context.lineWidth = 2;
+  if (glow) { context.shadowColor = color; context.shadowBlur = glow; }
+  context.beginPath();
+  context.arc(px + size / 2, py + size / 2, size / 2 - 4, 0, Math.PI * 2);
+  context.stroke();
+  context.shadowBlur = 0;
+  context.shadowColor = 'transparent';
+  context.globalAlpha = 1;
+}
+
+// Camino rectangular redondeado (arcTo, sin depender de roundRect)
+function roundedPath(context, x, y, w, h, r) {
+  context.beginPath();
+  context.moveTo(x + r, y);
+  context.arcTo(x + w, y, x + w, y + h, r);
+  context.arcTo(x + w, y + h, x, y + h, r);
+  context.arcTo(x, y + h, x, y, r);
+  context.arcTo(x, y, x + w, y, r);
+  context.closePath();
+}
+
+const SKINS = {
+  retro: {
+    colors: COLORS,
+    boardBg: null,
+    grid: null,
+    drawBlock(context, px, py, size, color, alpha) {
+      context.globalAlpha = alpha ?? 1;
+      context.fillStyle = color;
+      context.fillRect(px + 1, py + 1, size - 2, size - 2);
+      context.fillStyle = 'rgba(255,255,255,0.12)';
+      context.fillRect(px + 1, py + 1, size - 2, 4);
+      context.globalAlpha = 1;
+    },
+  },
+  neon: {
+    colors: [null, '#00f0ff', '#fff700', '#d500f9', '#39ff14', '#ff1744', '#448aff', '#ff9100', '#e0e0ff'],
+    boardBg: '#000000',
+    grid: '#14142a',
+    holeGlow: 10,
+    drawBlock(context, px, py, size, color, alpha) {
+      const a = alpha ?? 1;
+      context.shadowColor = color;
+      context.shadowBlur = 12;
+      context.strokeStyle = color;
+      context.lineWidth = 2;
+      context.globalAlpha = a;
+      context.strokeRect(px + 3, py + 3, size - 6, size - 6);
+      context.fillStyle = color;
+      context.globalAlpha = a * 0.35;
+      context.fillRect(px + 3, py + 3, size - 6, size - 6);
+      context.shadowBlur = 0;
+      context.shadowColor = 'transparent';
+      context.globalAlpha = 1;
+    },
+  },
+  pastel: {
+    colors: [null, '#a8e6ef', '#fff1b8', '#d9b8ee', '#b9e8c0', '#f7b8bd', '#b8d4f5', '#fcd5a5', '#d5dde2'],
+    boardBg: null,
+    grid: null,
+    drawBlock(context, px, py, size, color, alpha) {
+      context.globalAlpha = alpha ?? 1;
+      context.fillStyle = color;
+      roundedPath(context, px + 2, py + 2, size - 4, size - 4, 8);
+      context.fill();
+      context.fillStyle = 'rgba(255,255,255,0.35)';
+      roundedPath(context, px + 5, py + 5, size - 14, 5, 2.5);
+      context.fill();
+      context.globalAlpha = 1;
+    },
+  },
+  pixel: {
+    colors: [null, '#29b6f6', '#fdd835', '#ab47bc', '#66bb6a', '#ef5350', '#5c6bc0', '#ff9800', '#90a4ae'],
+    boardBg: null,
+    grid: null,
+    drawBlock(context, px, py, size, color, alpha) {
+      const x = px + 1, y = py + 1, s = size - 2, p = Math.max(2, Math.floor(s / 8));
+      context.globalAlpha = alpha ?? 1;
+      context.fillStyle = color;
+      context.fillRect(x, y, s, s);
+      // bordes claro/oscuro
+      context.fillStyle = 'rgba(255,255,255,0.35)';
+      context.fillRect(x, y, s, p);
+      context.fillRect(x, y, p, s);
+      context.fillStyle = 'rgba(0,0,0,0.35)';
+      context.fillRect(x, y + s - p, s, p);
+      context.fillRect(x + s - p, y, p, s);
+      // trama de píxeles tipo ajedrez
+      context.fillStyle = 'rgba(0,0,0,0.14)';
+      for (let i = 1; i * p < s - p; i++)
+        for (let j = 1; j * p < s - p; j++)
+          if ((i + j) % 2 === 0) context.fillRect(x + i * p, y + j * p, p, p);
+      context.globalAlpha = 1;
+    },
+  },
+};
+
+let currentSkin = 'retro';
+
+function loadSkin() {
+  try {
+    const s = localStorage.getItem(SKIN_KEY);
+    return Object.hasOwn(SKINS, s) ? s : 'retro';
+  } catch {
+    return 'retro';
+  }
+}
+
+// Aplica la skin: fondo de los canvas vía CSS var y valor del selector
+function applySkin(name) {
+  currentSkin = Object.hasOwn(SKINS, name) ? name : 'retro';
+  const bg = SKINS[currentSkin].boardBg;
+  if (bg) document.documentElement.style.setProperty('--skin-bg', bg);
+  else document.documentElement.style.removeProperty('--skin-bg');
+  skinSelect.value = currentSkin;
+}
+
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 
 function createBoard() {
@@ -188,28 +313,16 @@ function updateHUD() {
 
 function drawBlock(context, x, y, colorIndex, size, alpha) {
   if (!colorIndex) return;
+  const skin = SKINS[currentSkin];
   if (colorIndex === HOLE) {
-    context.globalAlpha = alpha ?? 1;
-    context.strokeStyle = COLORS[8];
-    context.lineWidth = 2;
-    context.beginPath();
-    context.arc(x * size + size / 2, y * size + size / 2, size / 2 - 4, 0, Math.PI * 2);
-    context.stroke();
-    context.globalAlpha = 1;
+    drawHoleRing(context, x * size, y * size, size, skin.colors[8], alpha, skin.holeGlow);
     return;
   }
-  const color = COLORS[colorIndex];
-  context.globalAlpha = alpha ?? 1;
-  context.fillStyle = color;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-  // highlight
-  context.fillStyle = 'rgba(255,255,255,0.12)';
-  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
-  context.globalAlpha = 1;
+  skin.drawBlock(context, x * size, y * size, size, skin.colors[colorIndex], alpha);
 }
 
 function drawGrid() {
-  ctx.strokeStyle = gridColor;
+  ctx.strokeStyle = SKINS[currentSkin].grid || gridColor;
   ctx.lineWidth = 0.5;
   for (let c = 1; c < COLS; c++) {
     ctx.beginPath();
@@ -351,5 +464,15 @@ themeToggle.addEventListener('click', () => {
 });
 
 applyTheme(loadTheme());
+applySkin(loadSkin());
+
+skinSelect.addEventListener('change', () => {
+  applySkin(skinSelect.value);
+  try { localStorage.setItem(SKIN_KEY, currentSkin); } catch { /* sin persistencia */ }
+  skinSelect.blur(); // evita que Space/flechas cambien la selección
+  // redibuja ambos canvases (también en pausa o game over); seguro si aún no hay piezas
+  if (current) draw();
+  if (next) drawNext();
+});
 
 init();
