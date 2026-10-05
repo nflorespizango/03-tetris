@@ -55,6 +55,11 @@ jobs:
                **Pasos sugeridos para la solución:** lista accionable para quien implemente el fix.
                **Información faltante:** preguntas al autor si el issue es ambiguo (omitir si no aplica).
 
+            Formato: el comentario debe estar escrito en Markdown compatible con GitHub (GFM):
+            usa encabezados (`##`), **negritas**, listas con `-` o `1.`, `código` en línea y bloques
+            de código con triple acento grave, y enlaces/referencias válidas (por ejemplo `#123` o
+            rutas en `código`). No uses HTML salvo el comentario inicial `<!-- claude-triage -->`.
+
             Reglas: no modifiques código, no abras PRs, no cierres el issue. Si el issue no tiene
             suficiente información, indícalo y usa el label `question` si existe.
           claude_args: |
