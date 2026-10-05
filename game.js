@@ -140,6 +140,7 @@ function clearLines() {
     dropInterval = Math.max(100, 1000 - (level - 1) * 90);
     updateHUD();
   }
+  registerLock(cleared);
 }
 
 function ghostY() {
@@ -226,6 +227,7 @@ function drawGrid() {
 }
 
 function draw() {
+  if (!board || !current) return; // aún no empezó la partida
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawGrid();
 
@@ -263,6 +265,7 @@ function endGame() {
   cancelAnimationFrame(animId);
   overlayTitle.textContent = 'GAME OVER';
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
+  showGameOverRecords();
   overlay.classList.remove('hidden');
 }
 
@@ -304,6 +307,10 @@ function init() {
   level = 1;
   paused = false;
   gameOver = false;
+  started = true;
+  resetRunStats();
+  hideGameOverRecords();
+  startOverlay.classList.add('hidden');
   dropInterval = 1000;
   dropAccum = 0;
   lastTime = performance.now();
@@ -316,6 +323,8 @@ function init() {
 }
 
 document.addEventListener('keydown', e => {
+  // las teclas escritas en el campo de nombre no controlan el juego
+  if (e.target instanceof HTMLInputElement || !started) return;
   if (e.code === 'KeyP') { togglePause(); return; }
   if (paused || gameOver) return;
   switch (e.code) {
@@ -350,6 +359,194 @@ themeToggle.addEventListener('click', () => {
   draw(); // redibuja el canvas si el juego está en pausa o terminado
 });
 
+// ---- Récords ----
+const RECORDS_KEY = 'tetris-records';
+const STATS_KEY = 'tetris-best-stats';
+const NAME_KEY = 'tetris-last-name';
+const MAX_RECORDS = 5;
+
+const startOverlay = document.getElementById('start-overlay');
+const playBtn = document.getElementById('play-btn');
+const goRecords = document.getElementById('go-records');
+const recordMsg = document.getElementById('record-msg');
+const recordForm = document.getElementById('record-form');
+const recordName = document.getElementById('record-name');
+
+let started = false;
+let combo = 0;        // bloqueos consecutivos que limpian líneas
+let runBestCombo = 0; // mejor combo de la partida actual
+let pendingSave = false;
+
+function loadJSON(key, fallback) {
+  try {
+    const v = JSON.parse(localStorage.getItem(key));
+    return v ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveJSON(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* sin persistencia */ }
+}
+
+function loadRecords() {
+  const list = loadJSON(RECORDS_KEY, []);
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter(r => r && typeof r.score === 'number')
+    .map(r => ({ ...r, name: String(r.name ?? '').slice(0, 12) }))
+    .slice(0, MAX_RECORDS);
+}
+
+function loadBestStats() {
+  const s = loadJSON(STATS_KEY, {});
+  return {
+    bestCombo: Number(s?.bestCombo) || 0,
+    maxLines: Number(s?.maxLines) || 0,
+  };
+}
+
+function resetRunStats() {
+  combo = 0;
+  runBestCombo = 0;
+  pendingSave = false;
+}
+
+// Se llama en cada bloqueo de pieza con las líneas limpiadas
+function registerLock(cleared) {
+  if (cleared) {
+    combo++;
+    runBestCombo = Math.max(runBestCombo, combo);
+  } else {
+    combo = 0;
+  }
+}
+
+// Posición (0-based) que ocuparía la puntuación en el top, o -1 si no entra
+function recordRank(sc) {
+  if (sc <= 0) return -1;
+  const list = loadRecords();
+  let idx = list.findIndex(r => sc > r.score);
+  if (idx === -1) idx = list.length;
+  return idx < MAX_RECORDS ? idx : -1;
+}
+
+function renderRecords(table, highlight) {
+  const list = loadRecords();
+  table.replaceChildren();
+  const head = table.createTHead().insertRow();
+  ['#', 'Nombre', 'Puntos', 'Líneas'].forEach(t => {
+    const th = document.createElement('th');
+    th.textContent = t;
+    head.appendChild(th);
+  });
+  const body = table.createTBody();
+  if (!list.length) {
+    const td = body.insertRow().insertCell();
+    td.colSpan = 4;
+    td.className = 'records-empty';
+    td.textContent = 'Sin récords todavía';
+    return;
+  }
+  list.forEach((r, i) => {
+    const row = body.insertRow();
+    if (i === highlight) row.className = 'record-new';
+    if (r.date) row.title = `Nivel ${r.level ?? '-'} · combo ${r.bestCombo ?? 0} · ${String(r.date).slice(0, 10)}`;
+    [i + 1, r.name || 'Anónimo', (r.score || 0).toLocaleString(), r.lines ?? 0].forEach(v => {
+      row.insertCell().textContent = v;
+    });
+  });
+}
+
+function renderStats() {
+  const st = loadBestStats();
+  document.querySelectorAll('[data-stat="combo"]').forEach(el => { el.textContent = st.bestCombo; });
+  document.querySelectorAll('[data-stat="lines"]').forEach(el => { el.textContent = st.maxLines; });
+}
+
+function renderAllRecords(highlight = -1) {
+  document.querySelectorAll('.records-table').forEach(t => {
+    renderRecords(t, t === goRecords ? highlight : -1);
+  });
+  renderStats();
+}
+
+function showStartScreen() {
+  renderAllRecords();
+  startOverlay.classList.remove('hidden');
+  playBtn.focus();
+}
+
+function hideGameOverRecords() {
+  document.getElementById('go-records-box').classList.add('hidden');
+}
+
+function showGameOverRecords() {
+  // actualiza mejor combo y líneas máximas aunque no entre en el top
+  const st = loadBestStats();
+  st.bestCombo = Math.max(st.bestCombo, runBestCombo);
+  st.maxLines = Math.max(st.maxLines, lines);
+  saveJSON(STATS_KEY, st);
+
+  const rank = recordRank(score);
+  pendingSave = rank !== -1;
+  renderAllRecords();
+  recordForm.classList.toggle('hidden', !pendingSave);
+  recordMsg.textContent = pendingSave ? `¡Nuevo récord! Entras en el top ${MAX_RECORDS} (puesto ${rank + 1})` : '';
+  if (pendingSave) {
+    recordName.value = loadJSON(NAME_KEY, '');
+    setTimeout(() => { recordName.focus(); recordName.select(); }, 0);
+  }
+  document.getElementById('go-records-box').classList.remove('hidden');
+}
+
+function saveRecord() {
+  if (!pendingSave) return;
+  pendingSave = false;
+  const name = recordName.value.trim().slice(0, 12) || 'Anónimo';
+  const entry = {
+    name, score, lines, level, bestCombo: runBestCombo, date: new Date().toISOString(),
+  };
+  const list = loadRecords();
+  let idx = list.findIndex(r => score > r.score);
+  if (idx === -1) idx = list.length;
+  list.splice(idx, 0, entry);
+  saveJSON(RECORDS_KEY, list.slice(0, MAX_RECORDS));
+  saveJSON(NAME_KEY, name);
+  recordForm.classList.add('hidden');
+  recordMsg.textContent = `¡Guardado en el puesto ${idx + 1}!`;
+  renderAllRecords(idx);
+}
+
+recordForm.addEventListener('submit', e => {
+  e.preventDefault();
+  saveRecord();
+  document.getElementById('restart-btn').focus();
+  document.getElementById('restart-btn').blur(); // evita que Space reinicie
+});
+
+document.querySelectorAll('.reset-records').forEach(btn => {
+  btn.addEventListener('click', () => {
+    btn.blur(); // evita que Space vuelva a activar el botón
+    if (!confirm('¿Borrar todos los récords?')) return;
+    try {
+      localStorage.removeItem(RECORDS_KEY);
+      localStorage.removeItem(STATS_KEY);
+    } catch { /* sin persistencia */ }
+    // tras borrar ya no se puede guardar la puntuación actual
+    pendingSave = false;
+    recordForm.classList.add('hidden');
+    recordMsg.textContent = '';
+    renderAllRecords();
+  });
+});
+
+playBtn.addEventListener('click', () => {
+  playBtn.blur();
+  init();
+});
+
 applyTheme(loadTheme());
 
-init();
+showStartScreen();
